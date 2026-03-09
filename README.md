@@ -1,1 +1,2 @@
 # Ozone-Debugger-MCP-server
+This is an MCP (Model Context Protocol) server designed to automate SEGGER Ozone via its Command Line Interface (CLI). It enables AI agents to control the debugger for firmware flashing, target connection, and automated testing.
