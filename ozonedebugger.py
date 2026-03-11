@@ -86,32 +86,33 @@ def update_jdebug(
             # Use forward slashes for consistency inside .jdebug
             elf_path_normalized = elf_path.replace(os.sep, '/')
             
-            if re.search(r'Project\.AddElf\s*\(".*?"\)', content):
-                content = re.sub(
-                    r'(Project\.AddElf\s*\(")(.*?)("\);)',
-                    fr'\1{elf_path_normalized}\3',
-                    content
-                )
+            # Find and replace using regex to locate, then string replace to avoid special char issues
+            pattern = r'Project\.AddElf\s*\("([^"]+)"\);'
+            match = re.search(pattern, content)
+            if match:
+                old_line = match.group(0)
+                new_line = f'Project.AddElf("{elf_path_normalized}");'
+                content = content.replace(old_line, new_line, 1)
                 modified = True
         
         # Update device if provided
         if device:
-            if re.search(r'Project\.SetDevice\s*\(".*?"\)', content):
-                content = re.sub(
-                    r'(Project\.SetDevice\s*\(")(.*?)("\);)',
-                    fr'\1{device}\3',
-                    content
-                )
+            pattern = r'Project\.SetDevice\s*\("([^"]+)"\);'
+            match = re.search(pattern, content)
+            if match:
+                old_line = match.group(0)
+                new_line = f'Project.SetDevice("{device}");'
+                content = content.replace(old_line, new_line, 1)
                 modified = True
         
         # Update debugger if provided
         if debugger:
-            if re.search(r'Project\.SetDebugger\s*\(".*?"\)', content):
-                content = re.sub(
-                    r'(Project\.SetDebugger\s*\(")(.*?)("\);)',
-                    fr'\1{debugger}\3',
-                    content
-                )
+            pattern = r'Project\.SetDebugger\s*\("([^"]+)"\);'
+            match = re.search(pattern, content)
+            if match:
+                old_line = match.group(0)
+                new_line = f'Project.SetDebugger("{debugger}");'
+                content = content.replace(old_line, new_line, 1)
                 modified = True
         
         if not modified:
