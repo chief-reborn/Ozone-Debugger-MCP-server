@@ -9,8 +9,32 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("OzoneDebugger")
 
 def get_bash_executable():
-    """Find bash executable or return None if not available."""
-    return shutil.which('bash')
+    """Find bash executable with multiple fallback strategies for different OS."""
+    # First try standard PATH
+    bash_in_path = shutil.which('bash')
+    if bash_in_path:
+        return bash_in_path
+    
+    # Windows-specific: Try common Git Bash locations
+    if os.name == 'nt':  # Windows
+        git_bash_paths = [
+            os.path.expandvars(r'%ProgramFiles%\Git\bin\bash.exe'),
+            os.path.expandvars(r'%ProgramFiles(x86)%\Git\bin\bash.exe'),
+            os.path.expandvars(r'%LocalAppData%\Programs\Git\bin\bash.exe'),
+        ]
+        for path in git_bash_paths:
+            if os.path.exists(path):
+                return path
+        
+        # Try to find Git and infer bash location
+        git_exe = shutil.which('git')
+        if git_exe:
+            git_dir = os.path.dirname(os.path.dirname(git_exe))
+            bash_path = os.path.join(git_dir, 'bin', 'bash.exe')
+            if os.path.exists(bash_path):
+                return bash_path
+    
+    return None
 
 @mcp.tool()
 def generate_for_board(project_dir: str, board_name: str, template_jdebug: str = None, device: str = None, use_bash: bool = True) -> str:
