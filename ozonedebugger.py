@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import shutil
+from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 # Initialize MCP server
@@ -35,6 +36,10 @@ def get_bash_executable():
     
     return None
 
+def normalize_path(path: str) -> str:
+    """Normalize path separators and convert to absolute path."""
+    return os.path.normpath(os.path.abspath(path))
+
 @mcp.tool()
 def update_jdebug(
     jdebug_path: str,
@@ -48,7 +53,7 @@ def update_jdebug(
     
     Args:
         jdebug_path: Path to the .jdebug file.
-        elf_path: (Optional) New ELF firmware file path.
+        elf_path: (Optional) New firmware file path (.out or .elf).
         device: (Optional) Device model (e.g., 'nRF52840_XXAA', 'STM32F407VG').
         debugger: (Optional) Debugger model (e.g., 'JLink', 'ST-Link').
         output_path: (Optional) Save modified .jdebug to this path. If None, updates original file.
@@ -56,6 +61,9 @@ def update_jdebug(
     Returns:
         Status message with updated configuration or error details.
     """
+    # Normalize paths
+    jdebug_path = normalize_path(jdebug_path)
+    
     if not os.path.exists(jdebug_path):
         return f"Error: .jdebug file not found at {jdebug_path}"
     
@@ -66,10 +74,18 @@ def update_jdebug(
         
         modified = False
         
-        # Update ELF path if provided
+        # Update firmware file path (supports .out and .elf)
         if elf_path:
-            # Normalize path separators for consistency
-            elf_path_normalized = elf_path.replace('\\', '/')
+            # Normalize the firmware path
+            elf_path = normalize_path(elf_path)
+            
+            # Check if file exists
+            if not os.path.exists(elf_path):
+                return f"Error: Firmware file not found at {elf_path}"
+            
+            # Use forward slashes for consistency inside .jdebug
+            elf_path_normalized = elf_path.replace(os.sep, '/')
+            
             if re.search(r'Project\.AddElf\s*\(".*?"\)', content):
                 content = re.sub(
                     r'(Project\.AddElf\s*\(")(.*?)("\);)',
@@ -102,13 +118,13 @@ def update_jdebug(
             return f"Warning: No matching configuration found in {jdebug_path}"
         
         # Write to output file
-        target_path = output_path if output_path else jdebug_path
+        target_path = normalize_path(output_path) if output_path else jdebug_path
         with open(target_path, 'w', encoding='utf-8') as f:
             f.write(content)
         
         summary = f"Successfully updated .jdebug configuration.\nSaved to: {target_path}\n"
         if elf_path:
-            summary += f"- ELF: {elf_path}\n"
+            summary += f"- Firmware: {elf_path}\n"
         if device:
             summary += f"- Device: {device}\n"
         if debugger:
@@ -131,6 +147,9 @@ def flash_with_ozone(jdebug_path: str, use_bash: bool = True) -> str:
     Returns:
         Status message with Ozone output or error details.
     """
+    # Normalize path
+    jdebug_path = normalize_path(jdebug_path)
+    
     if not os.path.exists(jdebug_path):
         return f"Error: .jdebug file not found at {jdebug_path}"
     
@@ -208,6 +227,9 @@ def get_jdebug_info(jdebug_path: str) -> str:
     Returns:
         Extracted configuration values or error message.
     """
+    # Normalize path
+    jdebug_path = normalize_path(jdebug_path)
+    
     if not os.path.exists(jdebug_path):
         return f"Error: .jdebug file not found at {jdebug_path}"
     
@@ -217,10 +239,10 @@ def get_jdebug_info(jdebug_path: str) -> str:
         
         info = f"Configuration from: {jdebug_path}\n\n"
         
-        # Extract ELF path
+        # Extract firmware file path (supports .out and .elf)
         elf_match = re.search(r'Project\.AddElf\s*\("([^"]+)"\)', content)
         if elf_match:
-            info += f"ELF: {elf_match.group(1)}\n"
+            info += f"Firmware: {elf_match.group(1)}\n"
         
         # Extract device
         device_match = re.search(r'Project\.SetDevice\s*\("([^"]+)"\)', content)

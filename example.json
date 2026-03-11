@@ -1,32 +1,98 @@
 {
-    "tool": "patch_and_run_ozone",
-    "examples": [
+    "tools": [
         {
-            "description": "basic usage - only required parameters",
-            "parameters": {
-                "jdebug_path": "C:/projects/firmware/project.jdebug",
-                "new_elf_path": "C:/projects/firmware/build/output.elf"
-            }
+            "name": "update_jdebug",
+            "description": "Update .jdebug configuration (firmware path, device, debugger)",
+            "notes": "Supports both .out and .elf firmware files. Paths are normalized automatically.",
+            "examples": [
+                {
+                    "description": "Update firmware path (.out file)",
+                    "parameters": {
+                        "jdebug_path": "C:\\projects\\firmware\\project.jdebug",
+                        "elf_path": "C:\\projects\\firmware\\build\\firmware.out"
+                    }
+                },
+                {
+                    "description": "Update firmware path (.elf file)",
+                    "parameters": {
+                        "jdebug_path": "C:\\projects\\firmware\\project.jdebug",
+                        "elf_path": "C:\\projects\\firmware\\build\\firmware.elf"
+                    }
+                },
+                {
+                    "description": "Update multiple settings",
+                    "parameters": {
+                        "jdebug_path": "D:\\nrf52840\\project.jdebug",
+                        "elf_path": "D:\\nrf52840\\build\\app.out",
+                        "device": "nRF52840_XXAA",
+                        "debugger": "JLink"
+                    }
+                },
+                {
+                    "description": "Save to new file (create device variant)",
+                    "parameters": {
+                        "jdebug_path": "C:\\projects\\template.jdebug",
+                        "device": "STM32F407VG",
+                        "debugger": "ST-Link",
+                        "output_path": "C:\\projects\\stm32f407.jdebug"
+                    }
+                }
+            ]
         },
         {
-            "description": "full parameters with device specified",
-            "parameters": {
-                "jdebug_path": "/home/user/nrf52840/project.jdebug",
-                "new_elf_path": "/home/user/nrf52840/build/firmware.elf",
-                "device": "nRF52840_XXAA"
-            }
+            "name": "flash_with_ozone",
+            "description": "Flash firmware using SEGGER Ozone CLI",
+            "examples": [
+                {
+                    "description": "Flash with bash shell (default, for Windows Git Bash)",
+                    "parameters": {
+                        "jdebug_path": "C:\\projects\\firmware\\project.jdebug",
+                        "use_bash": true
+                    }
+                },
+                {
+                    "description": "Flash without bash (direct system call)",
+                    "parameters": {
+                        "jdebug_path": "/home/user/firmware/project.jdebug",
+                        "use_bash": false
+                    }
+                }
+            ]
         },
         {
-            "description": "STM32F4 example with specific paths and device",
-            "parameters": {
-                "jdebug_path": "D:/stm32_project/debug.jdebug",
-                "new_elf_path": "D:/stm32_project/build/stm32f4.elf",
-                "device": "STM32F407VG"
-            }
+            "name": "update_and_flash",
+            "description": "Update .jdebug settings and immediately flash (one-step operation)",
+            "examples": [
+                {
+                    "description": "Update firmware and flash",
+                    "parameters": {
+                        "jdebug_path": "C:\\projects\\firmware\\project.jdebug",
+                        "elf_path": "C:\\projects\\firmware\\build\\app.out"
+                    }
+                },
+                {
+                    "description": "Update all settings and flash",
+                    "parameters": {
+                        "jdebug_path": "D:\\nrf52840\\debug.jdebug",
+                        "elf_path": "D:\\nrf52840\\build\\firmware.out",
+                        "device": "nRF52840_XXAA",
+                        "debugger": "JLink",
+                        "use_bash": true
+                    }
+                }
+            ]
+        },
+        {
+            "name": "get_jdebug_info",
+            "description": "Read and display current .jdebug configuration",
+            "examples": [
+                {
+                    "description": "Check current configuration",
+                    "parameters": {
+                        "jdebug_path": "C:\\projects\\firmware\\project.jdebug"
+                    }
+                }
+            ]
         }
-    ],
-    "response": {
-        "success": "Project has been updated and attempted to run.\n--- Console Log ---\n[Ozone output]\n--- Error Feedback ---\n[Error messages if any]",
-        "error": "Error: Project file not found [path] 或 Exception occurred during processing: [error message]"
-    }
+    ]
 }
