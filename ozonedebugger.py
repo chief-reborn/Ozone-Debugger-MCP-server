@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("OzoneDebugger")
 
 @mcp.tool()
-def generate_for_board(project_dir: str, board_name: str, template_jdebug: str = None, device: str = None) -> str:
+def generate_for_board(project_dir: str, board_name: str, template_jdebug: str = None, device: str = None, use_bash: bool = True) -> str:
     """
     Build firmware and generate .jdebug configuration for a specific target board.
     
@@ -17,6 +17,7 @@ def generate_for_board(project_dir: str, board_name: str, template_jdebug: str =
         board_name: Target board name (e.g., 'nRF52840', 'STM32F407').
         template_jdebug: (Optional) Template .jdebug file path. If not provided, will search for one.
         device: (Optional) Device model for SetDevice. If not provided, derived from board_name.
+        use_bash: (Optional) Use bash shell for build command (default: True).
     
     Returns:
         Status message with generated file paths or error details.
@@ -27,8 +28,12 @@ def generate_for_board(project_dir: str, board_name: str, template_jdebug: str =
         
         # 1. Build for specific board using Makefile variable
         build_cmd = f"make BOARD={board_name} clean && make BOARD={board_name}"
-        print(f"Building for board: {board_name}")
-        build_result = subprocess.run(build_cmd, shell=True, capture_output=True, text=True, timeout=300)
+        
+        # Execute with bash if requested
+        if use_bash:
+            build_result = subprocess.run(build_cmd, shell=True, executable='/bin/bash', capture_output=True, text=True, timeout=300)
+        else:
+            build_result = subprocess.run(build_cmd, shell=True, capture_output=True, text=True, timeout=300)
         
         if build_result.returncode != 0:
             os.chdir(orig_dir)
@@ -89,7 +94,7 @@ def generate_for_board(project_dir: str, board_name: str, template_jdebug: str =
         return f"Exception occurred in generate_for_board: {str(e)}"
 
 @mcp.tool()
-def patch_and_run_ozone(jdebug_path: str, new_elf_path: str, device: str = None) -> str:
+def patch_and_run_ozone(jdebug_path: str, new_elf_path: str, device: str = None, use_bash: bool = True) -> str:
     """
     Modify the .jdebug project file and execute flashing/debugging tasks.
     
@@ -97,6 +102,7 @@ def patch_and_run_ozone(jdebug_path: str, new_elf_path: str, device: str = None)
         jdebug_path: Path to the .jdebug file.
         new_elf_path: Path to the new compiled artifact (.elf).
         device: (Optional) Device model, such as 'nRF52840_XXAA'.
+        use_bash: (Optional) Use bash shell to invoke Ozone (default: True).
     
     Note: You must build the firmware first to generate the .elf file before using this tool.
     """
@@ -134,10 +140,12 @@ def patch_and_run_ozone(jdebug_path: str, new_elf_path: str, device: str = None)
         # 3. Start command line execution
         # -minimized: minimized run
         # -exit: automatically exit after task completion
-        args = ["Ozone", "-project", jdebug_path, "-minimized", "-exit"]
-        
-        # Capture output for AI log analysis
-        result = subprocess.run(args, capture_output=True, text=True, timeout=60)
+        if use_bash:
+            cmd = f'Ozone -project "{jdebug_path}" -minimized -exit'
+            result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True, timeout=60)
+        else:
+            args = ["Ozone", "-project", jdebug_path, "-minimized", "-exit"]
+            result = subprocess.run(args, capture_output=True, text=True, timeout=60)
         
         response = f"Project has been updated and attempted to run.\n--- Console Log ---\n{result.stdout}"
         if result.stderr:
