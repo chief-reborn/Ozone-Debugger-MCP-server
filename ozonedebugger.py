@@ -2,10 +2,15 @@ import os
 import re
 import subprocess
 import glob
+import shutil
 from mcp.server.fastmcp import FastMCP
 
 # Initialize MCP server
 mcp = FastMCP("OzoneDebugger")
+
+def get_bash_executable():
+    """Find bash executable or return None if not available."""
+    return shutil.which('bash')
 
 @mcp.tool()
 def generate_for_board(project_dir: str, board_name: str, template_jdebug: str = None, device: str = None, use_bash: bool = True) -> str:
@@ -31,7 +36,11 @@ def generate_for_board(project_dir: str, board_name: str, template_jdebug: str =
         
         # Execute with bash if requested
         if use_bash:
-            build_result = subprocess.run(build_cmd, shell=True, executable='/bin/bash', capture_output=True, text=True, timeout=300)
+            bash_exec = get_bash_executable()
+            if bash_exec:
+                build_result = subprocess.run(build_cmd, shell=True, executable=bash_exec, capture_output=True, text=True, timeout=300)
+            else:
+                return f"Error: bash not found in system PATH. Use use_bash=False to skip bash."
         else:
             build_result = subprocess.run(build_cmd, shell=True, capture_output=True, text=True, timeout=300)
         
@@ -141,8 +150,12 @@ def patch_and_run_ozone(jdebug_path: str, new_elf_path: str, device: str = None,
         # -minimized: minimized run
         # -exit: automatically exit after task completion
         if use_bash:
-            cmd = f'Ozone -project "{jdebug_path}" -minimized -exit'
-            result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True, timeout=60)
+            bash_exec = get_bash_executable()
+            if bash_exec:
+                cmd = f'Ozone -project "{jdebug_path}" -minimized -exit'
+                result = subprocess.run(cmd, shell=True, executable=bash_exec, capture_output=True, text=True, timeout=60)
+            else:
+                return f"Error: bash not found in system PATH. Use use_bash=False to skip bash."
         else:
             args = ["Ozone", "-project", jdebug_path, "-minimized", "-exit"]
             result = subprocess.run(args, capture_output=True, text=True, timeout=60)
