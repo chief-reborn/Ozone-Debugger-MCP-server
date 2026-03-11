@@ -1,32 +1,32 @@
 {
-  "tool": "patch_and_run_ozone",
-  "examples": [
-    {
-      "description": "基础用法 - 仅指定项目文件和新的ELF路径",
-      "parameters": {
-        "jdebug_path": "C:/projects/firmware/project.jdebug",
-        "new_elf_path": "C:/projects/firmware/build/output.elf"
-      }
-    },
-    {
-      "description": "完整用法 - 包括设备型号参数",
-      "parameters": {
-        "jdebug_path": "/home/user/nrf52840/project.jdebug",
-        "new_elf_path": "/home/user/nrf52840/build/firmware.elf",
-        "device": "nRF52840_XXAA"
-      }
-    },
-    {
-      "description": "STM32设备示例",
-      "parameters": {
-        "jdebug_path": "D:/stm32_project/debug.jdebug",
-        "new_elf_path": "D:/stm32_project/build/stm32f4.elf",
-        "device": "STM32F407VG"
-      }
+    "tool": "patch_and_run_ozone",
+    "examples": [
+        {
+            "description": "basic usage - only required parameters",
+            "parameters": {
+                "jdebug_path": "C:/projects/firmware/project.jdebug",
+                "new_elf_path": "C:/projects/firmware/build/output.elf"
+            }
+        },
+        {
+            "description": "full parameters with device specified",
+            "parameters": {
+                "jdebug_path": "/home/user/nrf52840/project.jdebug",
+                "new_elf_path": "/home/user/nrf52840/build/firmware.elf",
+                "device": "nRF52840_XXAA"
+            }
+        },
+        {
+            "description": "STM32F4 example with specific paths and device",
+            "parameters": {
+                "jdebug_path": "D:/stm32_project/debug.jdebug",
+                "new_elf_path": "D:/stm32_project/build/stm32f4.elf",
+                "device": "STM32F407VG"
+            }
+        }
+    ],
+    "response": {
+        "success": "Project has been updated and attempted to run.\n--- Console Log ---\n[Ozone output]\n--- Error Feedback ---\n[Error messages if any]",
+        "error": "Error: Project file not found [path] 或 Exception occurred during processing: [error message]"
     }
-  ],
-  "response": {
-    "success": "Project has been updated and attempted to run.\n--- Console Log ---\n[Ozone output]\n--- Error Feedback ---\n[Error messages if any]",
-    "error": "Error: Project file not found [path] 或 Exception occurred during processing: [error message]"
-  }
 }
