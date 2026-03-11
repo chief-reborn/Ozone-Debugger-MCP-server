@@ -1,7 +1,6 @@
 import os
 import re
 import subprocess
-import glob
 import shutil
 from mcp.server.fastmcp import FastMCP
 
@@ -37,160 +36,206 @@ def get_bash_executable():
     return None
 
 @mcp.tool()
-def generate_for_board(project_dir: str, board_name: str, template_jdebug: str = None, device: str = None, use_bash: bool = True) -> str:
+def update_jdebug(
+    jdebug_path: str,
+    elf_path: str = None,
+    device: str = None,
+    debugger: str = None,
+    output_path: str = None
+) -> str:
     """
-    Build firmware and generate .jdebug configuration for a specific target board.
-    
-    Args:
-        project_dir: Root directory of the project.
-        board_name: Target board name (e.g., 'nRF52840', 'STM32F407').
-        template_jdebug: (Optional) Template .jdebug file path. If not provided, will search for one.
-        device: (Optional) Device model for SetDevice. If not provided, derived from board_name.
-        use_bash: (Optional) Use bash shell for build command (default: True).
-    
-    Returns:
-        Status message with generated file paths or error details.
-    """
-    try:
-        orig_dir = os.getcwd()
-        os.chdir(project_dir)
-        
-        # 1. Build for specific board using Makefile variable
-        build_cmd = f"make BOARD={board_name} clean && make BOARD={board_name}"
-        
-        # Execute with bash if requested
-        if use_bash:
-            bash_exec = get_bash_executable()
-            if bash_exec:
-                build_result = subprocess.run(build_cmd, shell=True, executable=bash_exec, capture_output=True, text=True, timeout=300)
-            else:
-                return f"Error: bash not found in system PATH. Use use_bash=False to skip bash."
-        else:
-            build_result = subprocess.run(build_cmd, shell=True, capture_output=True, text=True, timeout=300)
-        
-        if build_result.returncode != 0:
-            os.chdir(orig_dir)
-            return f"Build failed for {board_name}!\n--- Output ---\n{build_result.stdout}\n--- Error ---\n{build_result.stderr}"
-        
-        # 2. Find generated ELF file
-        elf_pattern = "**/*.elf"
-        elf_files = glob.glob(os.path.join(project_dir, elf_pattern), recursive=True)
-        
-        if not elf_files:
-            os.chdir(orig_dir)
-            return f"Error: No ELF file found after building for {board_name}"
-        
-        elf_path = elf_files[0]
-        print(f"Generated ELF: {elf_path}")
-        
-        # 3. Generate or locate .jdebug file
-        if template_jdebug is None:
-            # Auto-search for template
-            jdebug_candidates = glob.glob(os.path.join(project_dir, "**/*.jdebug"), recursive=True)
-            if not jdebug_candidates:
-                os.chdir(orig_dir)
-                return f"Error: No .jdebug template found. Please provide template_jdebug parameter."
-            template_jdebug = jdebug_candidates[0]
-        
-        # Create board-specific .jdebug file
-        jdebug_output = os.path.join(project_dir, f"{board_name}.jdebug")
-        
-        with open(template_jdebug, 'r', encoding='utf-8') as f:
-            jdebug_content = f.read()
-        
-        # Update ELF path in .jdebug
-        jdebug_content = re.sub(
-            r'(Project\.AddElf\s*\(")(.*?)("\);)',
-            fr'\1{elf_path}\3',
-            jdebug_content
-        )
-        
-        # Update device if provided
-        if device:
-            jdebug_content = re.sub(
-                r'(Project\.SetDevice\s*\(")(.*?)("\);)',
-                fr'\1{device}\3',
-                jdebug_content
-            )
-        
-        with open(jdebug_output, 'w', encoding='utf-8') as f:
-            f.write(jdebug_content)
-        
-        os.chdir(orig_dir)
-        
-        return f"Success! Generated files for {board_name}:\n" \
-               f"- ELF: {elf_path}\n" \
-               f"- JDEBUG: {jdebug_output}"
-    
-    except Exception as e:
-        os.chdir(orig_dir)
-        return f"Exception occurred in generate_for_board: {str(e)}"
-
-@mcp.tool()
-def patch_and_run_ozone(jdebug_path: str, new_elf_path: str, device: str = None, use_bash: bool = True) -> str:
-    """
-    Modify the .jdebug project file and execute flashing/debugging tasks.
+    Update .jdebug project file settings.
     
     Args:
         jdebug_path: Path to the .jdebug file.
-        new_elf_path: Path to the new compiled artifact (.elf).
-        device: (Optional) Device model, such as 'nRF52840_XXAA'.
-        use_bash: (Optional) Use bash shell to invoke Ozone (default: True).
+        elf_path: (Optional) New ELF firmware file path.
+        device: (Optional) Device model (e.g., 'nRF52840_XXAA', 'STM32F407VG').
+        debugger: (Optional) Debugger model (e.g., 'JLink', 'ST-Link').
+        output_path: (Optional) Save modified .jdebug to this path. If None, updates original file.
     
-    Note: You must build the firmware first to generate the .elf file before using this tool.
+    Returns:
+        Status message with updated configuration or error details.
     """
-    if not os.path.exists(new_elf_path):
-        return f"Error: ELF file not found at {new_elf_path}. Please run 'make' or your build command first to generate the .elf file."
-    
     if not os.path.exists(jdebug_path):
-        return f"Error: Project file not found {jdebug_path}"
-
+        return f"Error: .jdebug file not found at {jdebug_path}"
+    
     try:
-        # 1. Read and modify the .jdebug file
+        # Read the original file
         with open(jdebug_path, 'r', encoding='utf-8') as f:
             content = f.read()
-
-        # Modify ELF path: match Project.AddElf("...");
-        # Use regex to ensure replacement within quotes
-        content = re.sub(
-            r'(Project\.AddElf\s*\(")(.*?)("\);)',
-            fr'\1{new_elf_path}\3',
-            content
-        )
-
-        # If device model is provided, modify Project.SetDevice("...");
+        
+        modified = False
+        
+        # Update ELF path if provided
+        if elf_path:
+            # Normalize path separators for consistency
+            elf_path_normalized = elf_path.replace('\\', '/')
+            if re.search(r'Project\.AddElf\s*\(".*?"\)', content):
+                content = re.sub(
+                    r'(Project\.AddElf\s*\(")(.*?)("\);)',
+                    fr'\1{elf_path_normalized}\3',
+                    content
+                )
+                modified = True
+        
+        # Update device if provided
         if device:
-            content = re.sub(
-                r'(Project\.SetDevice\s*\(")(.*?)("\);)',
-                fr'\1{device}\3',
-                content
-            )
-
-        # 2. Write back to file
-        with open(jdebug_path, 'w', encoding='utf-8') as f:
+            if re.search(r'Project\.SetDevice\s*\(".*?"\)', content):
+                content = re.sub(
+                    r'(Project\.SetDevice\s*\(")(.*?)("\);)',
+                    fr'\1{device}\3',
+                    content
+                )
+                modified = True
+        
+        # Update debugger if provided
+        if debugger:
+            if re.search(r'Project\.SetDebugger\s*\(".*?"\)', content):
+                content = re.sub(
+                    r'(Project\.SetDebugger\s*\(")(.*?)("\);)',
+                    fr'\1{debugger}\3',
+                    content
+                )
+                modified = True
+        
+        if not modified:
+            return f"Warning: No matching configuration found in {jdebug_path}"
+        
+        # Write to output file
+        target_path = output_path if output_path else jdebug_path
+        with open(target_path, 'w', encoding='utf-8') as f:
             f.write(content)
+        
+        summary = f"Successfully updated .jdebug configuration.\nSaved to: {target_path}\n"
+        if elf_path:
+            summary += f"- ELF: {elf_path}\n"
+        if device:
+            summary += f"- Device: {device}\n"
+        if debugger:
+            summary += f"- Debugger: {debugger}\n"
+        
+        return summary
+    
+    except Exception as e:
+        return f"Error updating .jdebug: {str(e)}"
 
-        # 3. Start command line execution
-        # -minimized: minimized run
-        # -exit: automatically exit after task completion
+@mcp.tool()
+def flash_with_ozone(jdebug_path: str, use_bash: bool = True) -> str:
+    """
+    Flash firmware using SEGGER Ozone with the specified .jdebug project.
+    
+    Args:
+        jdebug_path: Path to the .jdebug project file.
+        use_bash: (Optional) Use bash shell to invoke Ozone (default: True).
+    
+    Returns:
+        Status message with Ozone output or error details.
+    """
+    if not os.path.exists(jdebug_path):
+        return f"Error: .jdebug file not found at {jdebug_path}"
+    
+    try:
+        # Prepare Ozone command
+        # -minimized: run in minimized mode
+        # -exit: exit automatically after completion
+        
         if use_bash:
             bash_exec = get_bash_executable()
-            if bash_exec:
-                cmd = f'Ozone -project "{jdebug_path}" -minimized -exit'
-                result = subprocess.run(cmd, shell=True, executable=bash_exec, capture_output=True, text=True, timeout=60)
-            else:
-                return f"Error: bash not found in system PATH. Use use_bash=False to skip bash."
+            if not bash_exec:
+                return "Error: bash not found. Try use_bash=False to use system shell."
+            cmd = f'Ozone -project "{jdebug_path}" -minimized -exit'
+            result = subprocess.run(cmd, shell=True, executable=bash_exec, capture_output=True, text=True, timeout=120)
         else:
             args = ["Ozone", "-project", jdebug_path, "-minimized", "-exit"]
-            result = subprocess.run(args, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(args, capture_output=True, text=True, timeout=120)
         
-        response = f"Project has been updated and attempted to run.\n--- Console Log ---\n{result.stdout}"
+        response = f"Ozone execution completed.\n"
+        response += f"Return code: {result.returncode}\n"
+        
+        if result.stdout:
+            response += f"\n--- Console Output ---\n{result.stdout}"
+        
         if result.stderr:
-            response += f"\n--- Error Feedback ---\n{result.stderr}"
+            response += f"\n--- Error Output ---\n{result.stderr}"
+        
         return response
-
+    
+    except subprocess.TimeoutExpired:
+        return "Error: Ozone execution timed out (exceeded 120 seconds)"
     except Exception as e:
-        return f"Exception occurred during processing: {str(e)}"
+        return f"Error executing Ozone: {str(e)}"
+
+@mcp.tool()
+def update_and_flash(
+    jdebug_path: str,
+    elf_path: str = None,
+    device: str = None,
+    debugger: str = None,
+    use_bash: bool = True
+) -> str:
+    """
+    Update .jdebug settings and immediately flash with Ozone.
+    
+    Args:
+        jdebug_path: Path to the .jdebug file.
+        elf_path: (Optional) New ELF firmware file path.
+        device: (Optional) Device model (e.g., 'nRF52840_XXAA').
+        debugger: (Optional) Debugger model.
+        use_bash: (Optional) Use bash shell for Ozone (default: True).
+    
+    Returns:
+        Combined status from update and flash operations.
+    """
+    # First update .jdebug
+    update_result = update_jdebug(jdebug_path, elf_path, device, debugger)
+    
+    if "Error" in update_result:
+        return update_result
+    
+    # Then flash
+    flash_result = flash_with_ozone(jdebug_path, use_bash)
+    
+    return update_result + "\n" + flash_result
+
+@mcp.tool()
+def get_jdebug_info(jdebug_path: str) -> str:
+    """
+    Read and display current .jdebug configuration.
+    
+    Args:
+        jdebug_path: Path to the .jdebug file.
+    
+    Returns:
+        Extracted configuration values or error message.
+    """
+    if not os.path.exists(jdebug_path):
+        return f"Error: .jdebug file not found at {jdebug_path}"
+    
+    try:
+        with open(jdebug_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        info = f"Configuration from: {jdebug_path}\n\n"
+        
+        # Extract ELF path
+        elf_match = re.search(r'Project\.AddElf\s*\("([^"]+)"\)', content)
+        if elf_match:
+            info += f"ELF: {elf_match.group(1)}\n"
+        
+        # Extract device
+        device_match = re.search(r'Project\.SetDevice\s*\("([^"]+)"\)', content)
+        if device_match:
+            info += f"Device: {device_match.group(1)}\n"
+        
+        # Extract debugger
+        debugger_match = re.search(r'Project\.SetDebugger\s*\("([^"]+)"\)', content)
+        if debugger_match:
+            info += f"Debugger: {debugger_match.group(1)}\n"
+        
+        return info if info != f"Configuration from: {jdebug_path}\n\n" else "No configuration found in .jdebug file"
+    
+    except Exception as e:
+        return f"Error reading .jdebug: {str(e)}"
 
 if __name__ == "__main__":
     mcp.run()
