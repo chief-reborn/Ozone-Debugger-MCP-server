@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "OzoneDebugger": {
+            "type": "stdio",
+            "command": "python",
+            "args": [
+                "main.py"
+            ],
+            "env": {}
+        }
+    }
+}
